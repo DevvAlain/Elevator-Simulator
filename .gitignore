@@ -6,3 +6,7 @@ dist/
 .claude/
 .vscode/
 coverage/
+INTERVIEW_GUIDE.md
+prompt-elevator-simulator.md
+BAT-Node.js - Interview Test-231224-052639.pdf
+backend/check_api.js
