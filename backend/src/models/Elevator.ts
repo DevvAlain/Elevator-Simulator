@@ -21,9 +21,13 @@ export class Elevator extends MovableUnit {
   private _queue: number[] = []; // ordered view derived from _pending via LOOK
   private _doorHeld = false;
   private _doorTimer: NodeJS.Timeout | null = null;
+  // Security (C1): bound how long the door may be held open by /door/hold.
+  // Without this, one anonymous POST can brick an elevator forever.
+  private _holdTimer: NodeJS.Timeout | null = null;
 
   static DOOR_OPEN_MS = 3500;
   static DOOR_TRANSITION_MS = 600;
+  static MAX_HOLD_MS = 30000;
 
   constructor(id: number, startFloor = 1) {
     super(startFloor);
@@ -72,18 +76,52 @@ export class Elevator extends MovableUnit {
       clearTimeout(this._doorTimer);
       this._doorTimer = null;
     }
+    this.armHoldExpiry();
     if (this._doorState === "CLOSING") {
       this._doorState = "OPENING";
       setTimeout(() => {
         this._doorState = "OPEN";
         this._state = "DOOR_OPEN";
+        // The revert path bypasses openDoor(), so arm the normal auto-close
+        // here when the hold has already been released/expired. Otherwise
+        // the door would stay OPEN with no timer (stuck-door edge case).
+        if (!this._doorHeld)
+          this._doorTimer = setTimeout(
+            () => this.beginClosing(),
+            Elevator.DOOR_OPEN_MS,
+          );
       }, Elevator.DOOR_TRANSITION_MS);
     }
   }
   closeDoor() {
     this._doorHeld = false;
+    this.clearHoldExpiry();
     if (this._state === "DOOR_OPEN" || this._state === "DOOR_OPENING")
       this.beginClosing();
+  }
+
+  /** C1: force-release a held door after MAX_HOLD_MS. No timer leak:
+   *  previous expiry is always cleared before arming a new one, and the
+   *  timer handle is nulled on fire/clear. Reuses beginClosing() so the
+   *  normal close sequence (CLOSED -> rebuildQueue -> move) is preserved. */
+  private armHoldExpiry() {
+    this.clearHoldExpiry();
+    this._holdTimer = setTimeout(() => {
+      this._holdTimer = null;
+      if (!this._doorHeld) return;
+      this._doorHeld = false;
+      if (this._state === "DOOR_OPEN" || this._state === "DOOR_OPENING")
+        this.beginClosing();
+      // If the door is mid-transition (OPENING/CLOSING revert window) the
+      // pending transition timeout completes the cycle and arms auto-close
+      // via the !doorHeld branch above; nothing more to do here.
+    }, Elevator.MAX_HOLD_MS);
+  }
+  private clearHoldExpiry() {
+    if (this._holdTimer) {
+      clearTimeout(this._holdTimer);
+      this._holdTimer = null;
+    }
   }
 
   /** Called every tick by ElevatorController — moves 1 floor or handles arrival */

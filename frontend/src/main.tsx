@@ -14,6 +14,15 @@ export type ElevatorStatus = {
 };
 
 const socket = (globalThis as any).__elevatorSocket ?? ((globalThis as any).__elevatorSocket = io());
+
+// C1: operator token for the protected POST /api/* endpoints.
+// Set VITE_OPERATOR_TOKEN in frontend/.env to match the backend's
+// OPERATOR_TOKEN. When unset (plain local dev, backend without token)
+// no header is sent and everything works as before.
+function authHeaders(): Record<string, string> {
+  const t = (import.meta as any).env?.VITE_OPERATOR_TOKEN as string | undefined;
+  return t ? { "x-operator-token": t } : {};
+}
 export default function App() {
   const [elevators, setElevators] = useState<ElevatorStatus[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -52,7 +61,7 @@ export default function App() {
   const hall = (floor: number, dir: "UP" | "DOWN") =>
     fetch("/api/hall-call", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ floor, direction: dir }),
     }).then((r) => {
       if (!r.ok) r.json().then((j) => alert(j.error || r.statusText)).catch(() => {});
@@ -60,19 +69,19 @@ export default function App() {
   const car = (elevatorId: number, floor: number) =>
     fetch("/api/car-call", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ elevatorId, floor }),
     });
   const hold = (id: number) =>
     fetch("/api/door/hold", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ elevatorId: id }),
     });
   const close = (id: number) =>
     fetch("/api/door/close", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ elevatorId: id }),
     });
   return (
