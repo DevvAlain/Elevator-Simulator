@@ -93,3 +93,18 @@ cd frontend && npx tsc --noEmit
 - `ExpressElevator` đã có sẵn, demo skip floors
 - Persist state Redis/DB, thêm weight/capacity, priority queue, metrics wait-time
 - Animation CSS transition khi `currentFloor` thay đổi
+
+## Bảo mật & Env
+
+```bash
+cp backend/.env.example backend/.env     # điền OPERATOR_TOKEN khi deploy/share
+cp frontend/.env.example frontend/.env   # VITE_OPERATOR_TOKEN khớp backend
+```
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `OPERATOR_TOKEN` (backend) | trống = dev-open | Token bảo vệ mọi `POST /api/*` (`x-operator-token` hoặc `Authorization: Bearer`). Không set thì chạy ngay như demo; deploy phải set chuỗi ngẫu nhiên dài |
+| `ALLOWED_ORIGINS` (backend) | `http://localhost:5173` | Allowlist CORS cho REST + Socket.IO, không wildcard |
+| `VITE_OPERATOR_TOKEN` (frontend) | trống = không gửi header | Phải khớp `OPERATOR_TOKEN` backend khi backend đã bật auth |
+
+Các hardening đã có sẵn: rate limit (`POST /api/*` 60/phút, `/api/door/*` 20/phút → `429`), validate số nguyên strict (`400`), helmet headers (ẩn `X-Powered-By`), JSON lỗi trả `400 {"error":"invalid JSON"}` không lộ stack, cửa hold tối đa 30s tự nhả (`MAX_HOLD_MS`). Limiter hiện tại in-memory (1 instance) — scale thì chuyển Redis store.
